@@ -1,0 +1,6 @@
+[package]
+name = "wma-tables"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "LGPL-2.1-or-later"

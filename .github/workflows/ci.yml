@@ -1,0 +1,31 @@
+# Builds without the ffmpeg feature: distributions do not ship FFmpeg 8.1
+# development libraries yet. The tests use the ffmpeg command, which any
+# version provides. Tests that need testdata/ skip without it.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: cargo fmt --all --check
+      - run: cargo clippy --release --no-default-features --all-targets -- -D warnings
+      - run: cargo test --release --no-default-features
+
+  minimum-rust:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.88
+      - run: cargo check --no-default-features --all-targets

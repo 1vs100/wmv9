@@ -1,0 +1,54 @@
+# Decomp, MS binaries and disc images stay OUTSIDE the repo (see MODLOG.md).
+# Rule: this repo tracks notes, docs and tool source only. Never commit
+# binaries, images or decompiler output.
+
+# Disc images and extracted trees
+*.iso
+*.wim
+*.swm
+sources/
+isos/
+orig/
+*-decomp/
+*-extracted/
+
+# Windows binaries (both cases, this fs is case-sensitive)
+*.[Dd][Ll][Ll]
+*.[Ee][Xx][Ee]
+*.sys
+*.SYS
+*.ax
+*.acm
+*.ocx
+*.msi
+*.cab
+*.msu
+*.mui
+*.MUI
+
+# Download temps
+*.aria2
+*.st
+*.part
+
+# Build and test output
+out/
+*.o
+*.obj
+
+# idadriver runtime artifacts (per-instance dirs)
+idadriver*/cmd.py
+idadriver*/result.txt
+idadriver*/done
+idadriver*/ready
+idadriver*/driver.log
+ida*.log
+
+# Original reference driver copy (other project); this repo uses idadriver_wmvenc/
+/idadriver/
+
+# Third-party sample media; tests skip when absent
+/testdata/
+
+# Rust build output
+/target/

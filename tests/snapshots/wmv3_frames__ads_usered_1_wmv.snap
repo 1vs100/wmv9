@@ -1,0 +1,37 @@
+---
+source: tests/wmv3_frames.rs
+expression: summary(&path)
+---
+types: {"B": 222, "I": 9, "P": 218}
+pqindex: {4: 111, 5: 164, 6: 108, 7: 56, 8: 10}
+intra trailing: {"0 bits zero": 2, "1 bits zero": 1, "2 bits zero": 1, "3 bits zero": 1, "4 bits zero": 1, "5 bits zero": 1, "6 bits zero": 1, "7 bits zero": 1}
+p forms: {"1mv": 28355, "1mv intra": 480, "4mv": 9650, "4mv ac_pred": 473, "halves": 1282, "hybrid": 6892, "inter blocks": 76373, "intra blocks": 4445, "mv escape": 154, "raw mvtype bits": 0, "raw skip bits": 0, "skipped 1mv": 49081, "skipped 4mv": 724, "subblkpat": 8222, "subblocks": 103382, "ttblk": 35866, "ttmb": 26232}
+b forms: {"cbpcy": 7391, "coded": 12836, "direct": 4514, "direct ttmb": 3949, "inter blocks": 16735, "interpolated mv2": 5280, "intra": 136, "raw direct bits": 0, "raw skip bits": 0, "skipped": 50078, "skipped direct": 22482}
+intra forms: {"ac direct": 92541, "ac explicit": 96, "ac explicit first": 4, "ac level escape": 414, "ac run escape": 65, "dc coded": 10296, "dc escape": 2, "dc zero": 11572}
+direct imode=1 invert=0: 84
+direct imode=1 invert=1: 8
+direct imode=2 invert=0: 75
+direct imode=2 invert=1: 5
+direct imode=3 invert=0: 15
+direct imode=4 invert=0: 12
+direct imode=4 invert=1: 1
+direct imode=5 invert=0: 20
+direct imode=5 invert=1: 1
+direct imode=6 invert=0: 1
+mvtype imode=1 invert=0: 11
+mvtype imode=2 invert=0: 8
+mvtype imode=3 invert=0: 104
+mvtype imode=4 invert=0: 60
+mvtype imode=5 invert=0: 15
+skip imode=1 invert=0: 23
+skip imode=1 invert=1: 19
+skip imode=2 invert=0: 19
+skip imode=2 invert=1: 77
+skip imode=3 invert=0: 35
+skip imode=3 invert=1: 32
+skip imode=4 invert=0: 7
+skip imode=4 invert=1: 185
+skip imode=5 invert=0: 2
+skip imode=5 invert=1: 18
+skip imode=6 invert=0: 1
+skip imode=6 invert=1: 22

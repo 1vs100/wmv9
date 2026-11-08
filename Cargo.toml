@@ -1,0 +1,34 @@
+[package]
+name = "wmv9"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "GPL-3.0-or-later"
+
+[dependencies]
+vc1-tables = { path = "crates/vc1-tables" }
+wma-tables = { path = "crates/wma-tables" }
+thiserror = "2.0.21"
+# Reads any media file in wmv3-encode. Links the system's FFmpeg libraries.
+ffmpeg-next = { version = "8.1", optional = true, default-features = false, features = [
+    "codec",
+    "format",
+    "filter",
+    "software-resampling",
+    "software-scaling",
+] }
+
+[features]
+default = ["ffmpeg"]
+ffmpeg = ["dep:ffmpeg-next"]
+
+[dev-dependencies]
+insta = { version = "1.49.0", features = ["yaml"] }
+md-5 = "0.11.0"
+
+[workspace]
+members = [".", "crates/vc1-tables", "crates/wma-tables"]
+
+# Frame tests walk every bit of 29 MB of samples.
+[profile.test]
+opt-level = 2

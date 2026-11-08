@@ -1,0 +1,11 @@
+---
+source: tests/asf_structure.rs
+expression: summary(&asf)
+---
+packet_size: 3004
+packets: 246
+preroll_ms: 3000
+stream 1: audio tag=0x0162 ch=2 rate=44100 align=2973 extra=[10, 00, 03, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, 00, e0, 00, 42, c0]
+stream 2: video FourCc("WMV3") 424x240 codec_data=[4e, 09, 4a, 11, 00]
+stream 1: objects=6 key=0 bytes=17838
+stream 2: objects=253 key=22 bytes=706889

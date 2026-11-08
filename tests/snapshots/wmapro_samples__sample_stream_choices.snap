@@ -1,0 +1,80 @@
+---
+source: tests/wmapro_samples.rs
+expression: n
+---
+coefficient table 0: 17638
+coefficient table 1: 17495
+drc gain 0: 8846
+fill false: 19131
+modifier coded: 5297
+modifier len Some(0): 15826
+modifier len Some(1): 1099
+modifier len Some(2): 1132
+modifier len Some(3): 406
+modifier len Some(4): 36
+modifier len Some(5): 3
+packet reserved bits 2: 1070
+postproc Absent: 8846
+quant step 100: 495
+quant step 110: 2490
+quant step 120: 5963
+quant step 130: 6319
+quant step 140: 3119
+quant step 150: 10
+quant step 80: 6
+quant step 90: 100
+scale changed 1: 1428
+scale changed 2: 1983
+scale changed 3: 2290
+scale changed 4: 2301
+scale changed 5: 11666
+scale dpcm step 1: 1118
+scale dpcm step 2: 15378
+scale kept: 840
+stream block_align 2973: 2
+stream block_align 5945: 19
+subframe channels 2 len 1024: 2965
+subframe channels 2 len 128: 6214
+subframe channels 2 len 2048: 6285
+subframe channels 2 len 256: 1813
+subframe channels 2 len 512: 1854
+tiling same true 1024+1024: 521
+tiling same true 1024+128+128+128+128+512: 158
+tiling same true 1024+128+128+256+512: 97
+tiling same true 1024+256+128+128+128+128+256: 158
+tiling same true 1024+256+128+128+512: 104
+tiling same true 1024+512+128+128+128+128: 129
+tiling same true 1024+512+128+128+256: 107
+tiling same true 1024+512+256+128+128: 209
+tiling same true 128+1024+128+128+128+512: 8
+tiling same true 128+128+1024+128+128+512: 3
+tiling same true 128+128+128+128+512+1024: 196
+tiling same true 128+128+256+128+128+128+128+1024: 1
+tiling same true 128+128+256+128+128+256+1024: 1
+tiling same true 128+128+256+512+1024: 208
+tiling same true 128+128+512+1024+128+128: 2
+tiling same true 128+128+512+128+128+1024: 6
+tiling same true 128+256+512+128+128+128+256+512: 4
+tiling same true 128+512+1024+128+128+128: 2
+tiling same true 128+512+128+128+128+1024: 6
+tiling same true 2048: 6285
+tiling same true 256+128+128+128+128+256+1024: 143
+tiling same true 256+128+128+512+1024: 64
+tiling same true 512+128+128+128+128+1024: 136
+tiling same true 512+128+128+256+1024: 112
+tiling same true 512+256+128+128+1024: 73
+tiling same true 512+256+128+128+128+128+256+512: 113
+trailer 0 on last frame of its packet: 1070
+trailer 1 on other frame of its packet: 7776
+transform PairMidSide per-band false: 18536
+transform PairMidSide per-band true: 8
+transform PairNone per-band false: 587
+transmit false: 3129
+transmit true: 35133
+trim None: 8804
+"trim Some(Trim { start: None, end: Some(0) })": 1
+"trim Some(Trim { start: None, end: Some(1062) })": 12
+"trim Some(Trim { start: None, end: Some(165) })": 2
+"trim Some(Trim { start: None, end: Some(76) })": 6
+"trim Some(Trim { start: Some(2048), end: None })": 21
+vector counts false: 18502

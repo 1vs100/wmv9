@@ -3,6 +3,7 @@
 [![CI](https://github.com/1vs100/wmv9/actions/workflows/ci.yml/badge.svg)](https://github.com/1vs100/wmv9/actions/workflows/ci.yml)
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](LICENSE)
 [![Rust 1.88+](https://img.shields.io/badge/rust-1.88%2B-orange.svg)](https://www.rust-lang.org)
+![ai](https://img.shields.io/badge/ai-assisted-orange?logo=micro%3Abit&logoColor=white&label=ai)
 
 - Encode video and audio to `.wmv` files on Linux: WMV3 (Windows Media Video 9, Simple/Main profile) video and WMA 9 Standard or WMA 10 Professional audio.
 - The files follow the layout of files written by Microsoft's Windows Media Format SDK 11, so software that only accepts those can read them.

@@ -111,15 +111,18 @@ fn integer_sad(reference: &Picture, src: &MbSamples, at: MbAt, mv: Mv) -> u32 {
             })
             .sum();
     }
-    let mut total = 0;
-    for r in 0..16 {
-        let y = (y0 + r).clamp(0, p.height as i32 - 1) as usize;
-        for c in 0..16 {
-            let x = (x0 + c).clamp(0, p.width as i32 - 1) as usize;
-            total += u32::from(src.y[(r * 16 + c) as usize].abs_diff(p.data[y * p.width + x]));
-        }
-    }
-    total
+    let xs: [usize; 16] =
+        std::array::from_fn(|c| (x0 + c as i32).clamp(0, p.width as i32 - 1) as usize);
+    src.y
+        .chunks_exact(16)
+        .enumerate()
+        .map(|(r, s)| {
+            let y = (y0 + r as i32).clamp(0, p.height as i32 - 1) as usize;
+            let row = &p.data[y * p.width..(y + 1) * p.width];
+            let line: [u8; 16] = std::array::from_fn(|c| row[xs[c]]);
+            sad(s, &line)
+        })
+        .sum()
 }
 
 /// Block `n` (0..6) of a macroblock's samples as 64 values.

@@ -52,6 +52,18 @@ impl Source {
         let margin = 1;
         let span = size + 3;
         let mut data = Vec::with_capacity(span * span);
+        let map = |v: u8| match lut {
+            Some(l) => i32::from(l[usize::from(v)]),
+            None => i32::from(v),
+        };
+        let (x0, y0) = (x - margin as isize, y - margin as isize);
+        if x0 >= 0 && y0 >= 0 && x0 as usize + span <= p.width && y0 as usize + span <= p.height {
+            for r in 0..span {
+                let o = (y0 as usize + r) * p.width + x0 as usize;
+                data.extend(p.data[o..o + span].iter().map(|&v| map(v)));
+            }
+            return Source { size, margin, data };
+        }
         for r in 0..span {
             for c in 0..span {
                 let v = at(
@@ -66,6 +78,13 @@ impl Source {
             }
         }
         Source { size, margin, data }
+    }
+
+    /// Row `r` of the fetched samples, from the margin's first: row
+    /// `r - margin` of the block, from column `-margin`.
+    fn row(&self, r: usize) -> &[i32] {
+        let span = self.size + 3;
+        &self.data[r * span..(r + 1) * span]
     }
 
     fn s(&self, x: isize, y: isize) -> i32 {
@@ -104,8 +123,8 @@ fn clip(v: i32) -> u8 {
 /// are the quarter-sample phases.
 pub fn mspel(src: &Source, hmode: usize, vmode: usize, rnd: Rnd) -> Vec<u8> {
     let rnd = rnd.get();
-    let n = src.size as isize;
-    let mut out = Vec::with_capacity((n * n) as usize);
+    let n = src.size;
+    let mut out = Vec::with_capacity(n * n);
     if vmode != 0 && hmode != 0 {
         const SHIFT: [i32; 4] = [0, 5, 1, 5];
         let shift = (SHIFT[hmode] + SHIFT[vmode]) >> 1;
@@ -113,49 +132,41 @@ pub fn mspel(src: &Source, hmode: usize, vmode: usize, rnd: Rnd) -> Vec<u8> {
         let tv = taps(vmode);
         // Vertical pass over columns -1..n+2, stored as i16 as in FFmpeg.
         let w = n + 3;
-        let mut tmp = vec![0i16; (n * w) as usize];
-        for j in 0..n {
-            for i in 0..w {
-                let x = i - 1;
-                let v = tv[0] * src.s(x, j - 1)
-                    + tv[1] * src.s(x, j)
-                    + tv[2] * src.s(x, j + 1)
-                    + tv[3] * src.s(x, j + 2);
-                tmp[(j * w + i) as usize] = ((v + r) >> shift) as i16;
+        let mut tmp = vec![0i16; n * w];
+        for (j, out_row) in tmp.chunks_exact_mut(w).enumerate() {
+            let rows: [&[i32]; 4] = std::array::from_fn(|k| src.row(j + k));
+            for (i, t) in out_row.iter_mut().enumerate() {
+                let v = tv[0] * rows[0][i]
+                    + tv[1] * rows[1][i]
+                    + tv[2] * rows[2][i]
+                    + tv[3] * rows[3][i];
+                *t = ((v + r) >> shift) as i16;
             }
         }
         let th = taps(hmode);
         let r = 64 - rnd;
-        for j in 0..n {
-            for i in 0..n {
-                let t = |k: isize| i32::from(tmp[(j * w + i + 1 + k) as usize]);
-                let v = th[0] * t(-1) + th[1] * t(0) + th[2] * t(1) + th[3] * t(2);
+        for row in tmp.chunks_exact(w) {
+            for t in row.windows(4).take(n) {
+                let v = th[0] * i32::from(t[0])
+                    + th[1] * i32::from(t[1])
+                    + th[2] * i32::from(t[2])
+                    + th[3] * i32::from(t[3]);
                 out.push(clip((v + r) >> 7));
             }
         }
     } else if vmode != 0 {
         let r = 1 - rnd;
         for j in 0..n {
-            for i in 0..n {
-                let v = [
-                    src.s(i, j - 1),
-                    src.s(i, j),
-                    src.s(i, j + 1),
-                    src.s(i, j + 2),
-                ];
-                out.push(clip(mspel_1d(v, vmode, r)));
+            let rows: [&[i32]; 4] = std::array::from_fn(|k| &src.row(j + k)[1..=n]);
+            let columns = rows[0].iter().zip(rows[1]).zip(rows[2]).zip(rows[3]);
+            for (((&a, &b), &c), &d) in columns {
+                out.push(clip(mspel_1d([a, b, c, d], vmode, r)));
             }
         }
     } else {
         for j in 0..n {
-            for i in 0..n {
-                let v = [
-                    src.s(i - 1, j),
-                    src.s(i, j),
-                    src.s(i + 1, j),
-                    src.s(i + 2, j),
-                ];
-                out.push(clip(mspel_1d(v, hmode, rnd)));
+            for v in src.row(j + 1).windows(4).take(n) {
+                out.push(clip(mspel_1d([v[0], v[1], v[2], v[3]], hmode, rnd)));
             }
         }
     }

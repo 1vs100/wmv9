@@ -223,6 +223,39 @@ struct Candidate {
     mv: Mv,
 }
 
+const WINDOW: usize = 2 * SEARCH as usize + 1;
+
+/// Whole-sample vectors the integer search tried within `SEARCH` of a
+/// centre. Clamped candidates of a window stay within it.
+struct Window {
+    centre: Mv,
+    tried: [bool; WINDOW * WINDOW],
+}
+
+impl Window {
+    fn new(centre: Mv) -> Self {
+        Window {
+            centre,
+            tried: [false; WINDOW * WINDOW],
+        }
+    }
+
+    fn index(&self, mv: Mv) -> Option<usize> {
+        let x = usize::try_from((mv.x - self.centre.x) / 4 + SEARCH).ok()?;
+        let y = usize::try_from((mv.y - self.centre.y) / 4 + SEARCH).ok()?;
+        (x < WINDOW && y < WINDOW).then_some(y * WINDOW + x)
+    }
+
+    fn tried(&self, mv: Mv) -> bool {
+        self.index(mv).is_some_and(|i| self.tried[i])
+    }
+
+    fn mark(&mut self, mv: Mv) {
+        let i = self.index(mv).expect("a candidate lies within its window");
+        self.tried[i] = true;
+    }
+}
+
 impl PPicture<'_> {
     fn mc(&self) -> Mc<'_> {
         Mc {
@@ -265,15 +298,17 @@ impl PPicture<'_> {
                 best = Some(Candidate { cost, mv });
             }
         };
-        let mut seen = std::collections::HashSet::new();
+        let mut windows: Vec<Window> = Vec::with_capacity(centres.len());
         for c in centres {
+            windows.push(Window::new(c));
             for dy in -SEARCH..=SEARCH {
                 for dx in -SEARCH..=SEARCH {
                     let mv = whole(Mv {
                         x: c.x + dx * 4,
                         y: c.y + dy * 4,
                     });
-                    if seen.insert((mv.x, mv.y)) {
+                    if !windows.iter().any(|w| w.tried(mv)) {
+                        windows.last_mut().expect("pushed above").mark(mv);
                         consider(mv, integer_sad(self.reference, src, at, mv));
                     }
                 }

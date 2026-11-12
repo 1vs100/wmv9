@@ -124,7 +124,7 @@ fn clip(v: i32) -> u8 {
 pub fn mspel(src: &Source, hmode: usize, vmode: usize, rnd: Rnd) -> Vec<u8> {
     let rnd = rnd.get();
     let n = src.size;
-    let mut out = Vec::with_capacity(n * n);
+    let mut out = vec![0; n * n];
     if vmode != 0 && hmode != 0 {
         const SHIFT: [i32; 4] = [0, 5, 1, 5];
         let shift = (SHIFT[hmode] + SHIFT[vmode]) >> 1;
@@ -133,44 +133,50 @@ pub fn mspel(src: &Source, hmode: usize, vmode: usize, rnd: Rnd) -> Vec<u8> {
         // Vertical pass over columns -1..n+2, stored as i16 as in FFmpeg.
         let w = n + 3;
         let mut tmp = vec![0i16; n * w];
-        for (j, out_row) in tmp.chunks_exact_mut(w).enumerate() {
-            let rows: [&[i32]; 4] = std::array::from_fn(|k| src.row(j + k));
-            for (i, t) in out_row.iter_mut().enumerate() {
-                let v = tv[0] * rows[0][i]
-                    + tv[1] * rows[1][i]
-                    + tv[2] * rows[2][i]
-                    + tv[3] * rows[3][i];
+        for (j, row) in tmp.chunks_exact_mut(w).enumerate() {
+            let rows = std::array::from_fn(|k| src.row(j + k));
+            for (t, v) in row.iter_mut().zip(quads(rows)) {
+                let v = tv[0] * v[0] + tv[1] * v[1] + tv[2] * v[2] + tv[3] * v[3];
                 *t = ((v + r) >> shift) as i16;
             }
         }
         let th = taps(hmode);
         let r = 64 - rnd;
-        for row in tmp.chunks_exact(w) {
-            for t in row.windows(4).take(n) {
-                let v = th[0] * i32::from(t[0])
-                    + th[1] * i32::from(t[1])
-                    + th[2] * i32::from(t[2])
-                    + th[3] * i32::from(t[3]);
-                out.push(clip((v + r) >> 7));
+        for (row, t) in out.chunks_exact_mut(n).zip(tmp.chunks_exact(w)) {
+            for (o, v) in row.iter_mut().zip(quads(std::array::from_fn(|k| &t[k..]))) {
+                let v = th[0] * i32::from(v[0])
+                    + th[1] * i32::from(v[1])
+                    + th[2] * i32::from(v[2])
+                    + th[3] * i32::from(v[3]);
+                *o = clip((v + r) >> 7);
             }
         }
     } else if vmode != 0 {
         let r = 1 - rnd;
-        for j in 0..n {
-            let rows: [&[i32]; 4] = std::array::from_fn(|k| &src.row(j + k)[1..=n]);
-            let columns = rows[0].iter().zip(rows[1]).zip(rows[2]).zip(rows[3]);
-            for (((&a, &b), &c), &d) in columns {
-                out.push(clip(mspel_1d([a, b, c, d], vmode, r)));
+        for (j, row) in out.chunks_exact_mut(n).enumerate() {
+            let rows = std::array::from_fn(|k| &src.row(j + k)[1..]);
+            for (o, v) in row.iter_mut().zip(quads(rows)) {
+                *o = clip(mspel_1d(v, vmode, r));
             }
         }
     } else {
-        for j in 0..n {
-            for v in src.row(j + 1).windows(4).take(n) {
-                out.push(clip(mspel_1d([v[0], v[1], v[2], v[3]], hmode, rnd)));
+        for (j, row) in out.chunks_exact_mut(n).enumerate() {
+            let s = src.row(j + 1);
+            for (o, v) in row.iter_mut().zip(quads(std::array::from_fn(|k| &s[k..]))) {
+                *o = clip(mspel_1d(v, hmode, rnd));
             }
         }
     }
     out
+}
+
+/// The elements of four slices side by side, as long as the shortest.
+fn quads<T: Copy>(s: [&[T]; 4]) -> impl Iterator<Item = [T; 4]> + '_ {
+    s[0].iter()
+        .zip(s[1])
+        .zip(s[2])
+        .zip(s[3])
+        .map(|(((&a, &b), &c), &d)| [a, b, c, d])
 }
 
 /// hpeldsp put_pixels (rnd 0) or put_no_rnd_pixels (rnd 1) at half-sample

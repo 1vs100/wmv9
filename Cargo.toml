@@ -23,6 +23,7 @@ default = ["ffmpeg"]
 ffmpeg = ["dep:ffmpeg-next"]
 
 [dev-dependencies]
+criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
 insta = { version = "1.49.0", features = ["yaml"] }
 md-5 = "0.11.0"
 
@@ -32,3 +33,7 @@ members = [".", "crates/vc1-tables", "crates/wma-tables"]
 # Frame tests walk every bit of 29 MB of samples.
 [profile.test]
 opt-level = 2
+
+[[bench]]
+name = "codecs"
+harness = false

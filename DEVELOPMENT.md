@@ -12,6 +12,7 @@
 - `cargo test --release` runs the tests.
 - Tests that need the sample files in `testdata/` skip when it is absent.
 - The differential and encoder tests need `ffmpeg` on `PATH`.
+- `cargo bench --bench codecs` measures encoding and decoding speed. The benchmarks that use `testdata/` skip when it is absent.
 - CI (`.github/workflows/ci.yml`) checks formatting, runs clippy and the tests without the `ffmpeg` feature, and checks the build on Rust 1.88.
 
 ## How it is checked

@@ -209,20 +209,18 @@ pub fn hpel(src: &Source, dxy: usize, rnd: Rnd) -> Vec<u8> {
 /// put_h264_chroma_mc8 (rnd 0, rounding 32) or put_no_rnd_vc1_chroma_mc8
 /// (rnd 1, rounding 28) at eighth-sample phase (x, y).
 pub fn chroma(src: &Source, x: i32, y: i32, rnd: Rnd) -> Vec<u8> {
-    let n = src.size as isize;
-    let a = (8 - x) * (8 - y);
-    let b = x * (8 - y);
-    let c = (8 - x) * y;
-    let d = x * y;
-    let r = 32 - 4 * rnd.get();
-    let mut out = Vec::with_capacity((n * n) as usize);
-    for j in 0..n {
-        for i in 0..n {
-            let v = a * src.s(i, j)
-                + b * src.s(i + 1, j)
-                + c * src.s(i, j + 1)
-                + d * src.s(i + 1, j + 1);
-            out.push(((v + r) >> 6) as u8);
+    let n = src.size;
+    // The weights sum to 64, so sums stay within 16 bits.
+    let w = [(8 - x) * (8 - y), x * (8 - y), (8 - x) * y, x * y].map(|w| w as i16);
+    let r = (32 - 4 * rnd.get()) as i16;
+    let mut out = vec![0; n * n];
+    for (j, row) in out.chunks_exact_mut(n).enumerate() {
+        let (top, bottom) = (&src.row(j + 1)[1..], &src.row(j + 2)[1..]);
+        for (o, v) in row
+            .iter_mut()
+            .zip(quads([top, &top[1..], bottom, &bottom[1..]]))
+        {
+            *o = ((w[0] * v[0] + w[1] * v[1] + w[2] * v[2] + w[3] * v[3] + r) >> 6) as u8;
         }
     }
     out

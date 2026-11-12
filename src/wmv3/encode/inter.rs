@@ -168,6 +168,16 @@ struct CodedResidual {
     added: [i16; 64],
 }
 
+/// Distances from the predicted vector, in quarter samples, whose rate
+/// `PPicture` keeps: those the searches around the prediction and zero
+/// meet most.
+const MV_COSTS: i32 = 1024;
+
+/// Rate term of a vector `d` quarter samples from the predicted one.
+fn mv_cost(lambda: f64, d: i32) -> f64 {
+    lambda.sqrt() * BITS_PER_MV * f64::from(d).ln_1p()
+}
+
 /// Encoder state of one P picture.
 struct PPicture<'a> {
     src: &'a Yuv420,
@@ -180,6 +190,8 @@ struct PPicture<'a> {
     zigzag: Vec<usize>,
     /// Lagrange multiplier: squared error per bit.
     lambda: f64,
+    /// `mv_cost` by distance, below `MV_COSTS`.
+    mv_costs: Vec<f64>,
     /// What the decoder reconstructs before the loop filter.
     model: Picture,
     intra: PIntra,
@@ -272,7 +284,10 @@ impl PPicture<'_> {
 
     fn mv_cost(&self, mv: Mv, pred: Mv) -> f64 {
         let d = (mv.x - pred.x).abs() + (mv.y - pred.y).abs();
-        self.lambda.sqrt() * BITS_PER_MV * f64::from(d).ln_1p()
+        usize::try_from(d)
+            .ok()
+            .and_then(|i| self.mv_costs.get(i).copied())
+            .unwrap_or_else(|| mv_cost(self.lambda, d))
     }
 
     /// Integer search around the predicted and zero vectors, then half
@@ -571,6 +586,7 @@ pub(crate) fn encode_p_picture(
     };
     let q = Quant::new(&h, ctx);
     let step = f64::from(q.pq * 2 + q.halfpq);
+    let lambda = 0.1 * step * step;
     let mut pic = PPicture {
         src,
         reference,
@@ -579,7 +595,8 @@ pub(crate) fn encode_p_picture(
         esc3: Esc3Plan::widest(q.pquant),
         cs: CodingSet::for_picture(&h).inter,
         zigzag: scan(InterShape::EightByEight),
-        lambda: 0.1 * step * step,
+        lambda,
+        mv_costs: (0..MV_COSTS).map(|d| mv_cost(lambda, d)).collect(),
         q,
         model: Picture::new(ctx.mb_dims()),
         intra: PIntra::new(&h, ctx),

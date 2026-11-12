@@ -38,11 +38,13 @@ fn at(p: &Plane, x: isize, y: isize) -> i32 {
 }
 
 /// A square of reference samples with a margin, after optional intensity
-/// compensation, addressed relative to its top left sample.
+/// compensation, addressed relative to its top left sample. Samples are
+/// i16 so the bicubic filter's first pass, which stays within 16 bits,
+/// runs on twice as many lanes.
 pub struct Source {
     size: usize,
     margin: usize,
-    data: Vec<i32>,
+    data: Vec<i16>,
 }
 
 impl Source {
@@ -53,8 +55,8 @@ impl Source {
         let span = size + 3;
         let mut data = Vec::with_capacity(span * span);
         let map = |v: u8| match lut {
-            Some(l) => i32::from(l[usize::from(v)]),
-            None => i32::from(v),
+            Some(l) => i16::from(l[usize::from(v)]),
+            None => i16::from(v),
         };
         let (x0, y0) = (x - margin as isize, y - margin as isize);
         if x0 >= 0 && y0 >= 0 && x0 as usize + span <= p.width && y0 as usize + span <= p.height {
@@ -72,8 +74,8 @@ impl Source {
                     y + r as isize - margin as isize,
                 );
                 data.push(match lut {
-                    Some(l) => i32::from(l[v as usize]),
-                    None => v,
+                    Some(l) => i16::from(l[v as usize]),
+                    None => v as i16,
                 });
             }
         }
@@ -82,7 +84,7 @@ impl Source {
 
     /// Row `r` of the fetched samples, from the margin's first: row
     /// `r - margin` of the block, from column `-margin`.
-    fn row(&self, r: usize) -> &[i32] {
+    fn row(&self, r: usize) -> &[i16] {
         let span = self.size + 3;
         &self.data[r * span..(r + 1) * span]
     }
@@ -90,12 +92,12 @@ impl Source {
     fn s(&self, x: isize, y: isize) -> i32 {
         let span = (self.size + 3) as isize;
         let m = self.margin as isize;
-        self.data[((y + m) * span + x + m) as usize]
+        i32::from(self.data[((y + m) * span + x + m) as usize])
     }
 }
 
 /// Bicubic taps by quarter-sample phase (vc1_mspel_*_filter_16bits).
-fn taps(mode: usize) -> [i32; 4] {
+fn taps(mode: usize) -> [i16; 4] {
     match mode {
         1 => [-4, 53, 18, -3],
         2 => [-1, 9, 9, -1],
@@ -104,8 +106,9 @@ fn taps(mode: usize) -> [i32; 4] {
     }
 }
 
-/// vc1_mspel_filter: single direction filter with rounding.
-fn mspel_1d(v: [i32; 4], mode: usize, r: i32) -> i32 {
+/// vc1_mspel_filter: single direction filter with rounding. Taps on
+/// samples sum to at most 71 * 255.
+fn mspel_1d(v: [i16; 4], mode: usize, r: i16) -> i16 {
     let t = taps(mode);
     let sum = t[0] * v[0] + t[1] * v[1] + t[2] * v[2] + t[3] * v[3];
     match mode {
@@ -128,7 +131,7 @@ pub fn mspel(src: &Source, hmode: usize, vmode: usize, rnd: Rnd) -> Vec<u8> {
     if vmode != 0 && hmode != 0 {
         const SHIFT: [i32; 4] = [0, 5, 1, 5];
         let shift = (SHIFT[hmode] + SHIFT[vmode]) >> 1;
-        let r = (1 << (shift - 1)) + rnd - 1;
+        let r = ((1 << (shift - 1)) + rnd - 1) as i16;
         let tv = taps(vmode);
         // Vertical pass over columns -1..n+2, stored as i16 as in FFmpeg.
         let w = n + 3;
@@ -137,10 +140,10 @@ pub fn mspel(src: &Source, hmode: usize, vmode: usize, rnd: Rnd) -> Vec<u8> {
             let rows = std::array::from_fn(|k| src.row(j + k));
             for (t, v) in row.iter_mut().zip(quads(rows)) {
                 let v = tv[0] * v[0] + tv[1] * v[1] + tv[2] * v[2] + tv[3] * v[3];
-                *t = ((v + r) >> shift) as i16;
+                *t = (v + r) >> shift;
             }
         }
-        let th = taps(hmode);
+        let th = taps(hmode).map(i32::from);
         let r = 64 - rnd;
         for (row, t) in out.chunks_exact_mut(n).zip(tmp.chunks_exact(w)) {
             for (o, v) in row.iter_mut().zip(quads(std::array::from_fn(|k| &t[k..]))) {
@@ -152,18 +155,18 @@ pub fn mspel(src: &Source, hmode: usize, vmode: usize, rnd: Rnd) -> Vec<u8> {
             }
         }
     } else if vmode != 0 {
-        let r = 1 - rnd;
+        let r = (1 - rnd) as i16;
         for (j, row) in out.chunks_exact_mut(n).enumerate() {
             let rows = std::array::from_fn(|k| &src.row(j + k)[1..]);
             for (o, v) in row.iter_mut().zip(quads(rows)) {
-                *o = clip(mspel_1d(v, vmode, r));
+                *o = clip(mspel_1d(v, vmode, r).into());
             }
         }
     } else {
         for (j, row) in out.chunks_exact_mut(n).enumerate() {
             let s = src.row(j + 1);
             for (o, v) in row.iter_mut().zip(quads(std::array::from_fn(|k| &s[k..]))) {
-                *o = clip(mspel_1d(v, hmode, rnd));
+                *o = clip(mspel_1d(v, hmode, rnd as i16).into());
             }
         }
     }

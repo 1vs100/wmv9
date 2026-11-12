@@ -1,0 +1,19 @@
+---
+source: tests/output_identity.rs
+expression: out
+---
+wmapro stereo: 14 chunks 8cba7399843f7bb21e56afb8beac59f9
+wmapro mono: 14 chunks f4705ce39a5156ef650b15e70a950c6e
+wmapro mono 32k: 14 chunks 413581818626b2f5fc02f9d892d5bd21
+xma stereo: 432 chunks 39f7263490b68ecbbcba4c8505f3b7a5
+xma mono: 432 chunks 089dba99fe4885e72805ee04f7d79ca5
+wma2 stereo: 110 chunks 6ff286e7f6348c46c887b1ecc26361a2
+wma2 mono: 110 chunks b3d248de3dfa0f85a316d87250a79919
+wmv3 encode: 30 chunks bf1f3d325f5cff918a440ebce8d4b68c
+wmv3 recon: 30 chunks a0a615771ddca768cd4727dc54af4909
+wmv3 encode rate: 30 chunks e647d4a8661e1c760b74ab7d466c7eda
+wmv3 encode sample: 60 chunks 02b62575472e118effb6114c8d09f968
+wmv3 encode sample q20: 60 chunks 34a2094ab50f9fe94cf69bfda7fc2a13
+decode hvideo15_1: 449 chunks 8695b5fad5c27260446d873f987b8d6b
+decode promo_1: 897 chunks ab1fbc99d0bb337086f1f294a8417483
+decode usered_1: 449 chunks 7c60a872b0184f5cc05f5e5dc63c7135

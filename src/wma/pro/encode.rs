@@ -66,6 +66,12 @@ const BALANCE_PACKETS: f64 = 2.0;
 const SAMPLE_RATES: std::ops::RangeInclusive<u32> = 8000..=48000;
 /// Smallest packet: a length prefix of 10 bits holds the coarsest frame.
 const MIN_BLOCK_ALIGN: u64 = 64;
+/// XMA's stream parameters, as Xbox 360 decoders assume them: frames of
+/// 512 samples and at most four subframes, length prefix and DRC gain, in
+/// packets of 2048 bytes that start with a 32-bit header.
+const XMA_DECODE_FLAGS: u16 = 0x10d6;
+const XMA_BLOCK_ALIGN: usize = 2048;
+const XMA_PACKET_HEADER_BITS: usize = 32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum EncodeError {
@@ -135,24 +141,41 @@ pub struct Encoder {
     /// Bits coded beyond the frame budget so far, within
     /// `BALANCE_PACKETS` packets.
     balance: f64,
+    rate: RateControl,
+}
+
+/// Frame sizes, in bits.
+struct RateControl {
+    /// What a frame takes on average.
+    budget: f64,
+    /// What a frame takes at most.
+    max: f64,
+}
+
+/// The rate XMA decoders lay out scale factor bands for.
+fn xma_band_rate(rate: u32) -> u32 {
+    match rate {
+        44101.. => 48000,
+        32001..=44100 => 44100,
+        24001..=32000 => 32000,
+        _ => 24000,
+    }
+}
+
+fn channel_mask(channels: Channels) -> u32 {
+    match channels {
+        // Front centre.
+        Channels::Mono => 0x4,
+        Channels::Stereo => 0x3,
+    }
 }
 
 impl Encoder {
     pub fn new(format: Format) -> Result<Self, EncodeError> {
-        let channel_mask = match format.channels {
-            // Front centre.
-            Channels::Mono => 0x4,
-            Channels::Stereo => 0x3,
-        };
-        if !SAMPLE_RATES.contains(&format.sample_rate.0) {
-            return Err(FormatError::SampleRate {
-                rate: format.sample_rate,
-            }
-            .into());
-        }
+        Self::check_rate(format)?;
         let mut header = Header {
             bits_per_sample: BITS_PER_SAMPLE,
-            channel_mask,
+            channel_mask: channel_mask(format.channels),
             reserved: [0; 8],
             decode_flags: DecodeFlags(DECODE_FLAGS_BASE),
             advanced: 0,
@@ -179,18 +202,74 @@ impl Encoder {
         }
         let block_align = (byte_rate * per_byte).div_ceil(rate) as usize;
         let cfg = Config::new(header, block_align, format.sample_rate.0)?;
+        let packet_bits = block_align as f64 * 8.0;
+        let rate = RateControl {
+            budget: packet_bits / FRAMES_PER_PACKET as f64,
+            max: packet_bits - 6.0 - f64::from(cfg.log2_frame_size),
+        };
+        Ok(Self::with_config(format, &cfg, rate))
+    }
+
+    /// An encoder of frames for XMA packets, which `finish_frames` returns.
+    /// The stream parameters are XMA's, whatever the format's rate.
+    pub fn xma(format: Format) -> Result<Self, EncodeError> {
+        Self::check_rate(format)?;
+        let header = Header {
+            bits_per_sample: BITS_PER_SAMPLE,
+            channel_mask: channel_mask(format.channels),
+            reserved: [0; 8],
+            decode_flags: DecodeFlags(XMA_DECODE_FLAGS),
+            advanced: 0,
+        };
+        let cfg = Config::new(header, XMA_BLOCK_ALIGN, xma_band_rate(format.sample_rate.0))?;
+        // A frame lies in one packet or across two.
+        let max = XMA_BLOCK_ALIGN * 8 - XMA_PACKET_HEADER_BITS;
+        let rate = u64::from(format.sample_rate.0);
+        let per_byte = 8 * cfg.frame_len as u64;
+        let min = (MIN_BLOCK_ALIGN * 8 * rate).div_ceil(FRAMES_PER_PACKET * per_byte);
+        let most = max as u64 * rate / per_byte;
+        let byte_rate = u64::from(format.byte_rate.0);
+        if !(min..=most).contains(&byte_rate) {
+            return Err(FormatError::ByteRate {
+                rate: format.byte_rate,
+                min: ByteRate(min as u32),
+                max: ByteRate(most as u32),
+            }
+            .into());
+        }
+        let rate = RateControl {
+            budget: (byte_rate * per_byte) as f64 / rate as f64,
+            max: max as f64,
+        };
+        Ok(Self::with_config(format, &cfg, rate))
+    }
+
+    fn check_rate(format: Format) -> Result<(), EncodeError> {
+        if SAMPLE_RATES.contains(&format.sample_rate.0) {
+            Ok(())
+        } else {
+            Err(FormatError::SampleRate {
+                rate: format.sample_rate,
+            }
+            .into())
+        }
+    }
+
+    fn with_config(format: Format, cfg: &Config, rate: RateControl) -> Self {
+        let n = cfg.frame_len;
         let channels = format.channels.count();
-        Ok(Encoder {
+        Encoder {
             format,
             mdcts: (0..cfg.bands.len()).map(|i| Mdct::new(n >> i)).collect(),
-            codec: Codec::new(&cfg),
+            codec: Codec::new(cfg),
             prev_block: n,
             ahead: std::collections::VecDeque::new(),
             pending: vec![vec![0.0; n]; channels],
             frames: Vec::new(),
             taken: 0,
             balance: 0.0,
-        })
+            rate,
+        }
     }
 
     pub fn config(&self) -> &Config {
@@ -263,6 +342,37 @@ impl Encoder {
 
     /// Codes the rest, completed with silence, and returns the packets.
     pub fn finish(mut self) -> Result<Vec<Packet>, EncodeError> {
+        self.code_rest()?;
+        let cfg = self.codec.config().clone();
+        let lens: Vec<usize> = self.frames.iter().map(|f| f.bits).collect();
+        let lay = layout(&cfg, &lens)?;
+        let frames = self.unpacked();
+        let packets = join(&cfg, &frames, &lay, Sequence(0));
+        Ok(packets
+            .into_iter()
+            .enumerate()
+            .map(|(p, data)| Packet {
+                data,
+                frame: FrameIndex(lay.starts.partition_point(|&s| s < p) as u64),
+            })
+            .collect())
+    }
+
+    /// Codes the rest, completed with silence, and returns the frames from
+    /// their length prefix to their trailer bit, which is 0.
+    pub fn finish_frames(mut self) -> Result<Vec<Bits>, EncodeError> {
+        self.code_rest()?;
+        Ok(self.unpacked())
+    }
+
+    fn unpacked(&self) -> Vec<Bits> {
+        self.frames
+            .iter()
+            .map(|f| unpack(&f.bytes, f.bits))
+            .collect()
+    }
+
+    fn code_rest(&mut self) -> Result<(), EncodeError> {
         let n = self.config().frame_len;
         // Output of frame k is input frame k - 1; the last frame needed
         // ends the input.
@@ -277,23 +387,7 @@ impl Encoder {
             self.next_frame(start, last.then_some(past as u32))?;
             start += n;
         }
-        let cfg = self.codec.config().clone();
-        let lens: Vec<usize> = self.frames.iter().map(|f| f.bits).collect();
-        let lay = layout(&cfg, &lens)?;
-        let frames: Vec<Bits> = self
-            .frames
-            .iter()
-            .map(|f| unpack(&f.bytes, f.bits))
-            .collect();
-        let packets = join(&cfg, &frames, &lay, Sequence(0));
-        Ok(packets
-            .into_iter()
-            .enumerate()
-            .map(|(p, data)| Packet {
-                data,
-                frame: FrameIndex(lay.starts.partition_point(|&s| s < p) as u64),
-            })
-            .collect())
+        Ok(())
     }
 
     /// Codes the frame of pending samples from `start` in the blocks its
@@ -482,7 +576,7 @@ impl Encoder {
         }
         self.prev_block = prev;
         let packet_bits = cfg.block_align as f64 * 8.0;
-        let budget = packet_bits / FRAMES_PER_PACKET as f64;
+        let budget = self.rate.budget;
         let share = if tiling.len() > 1 {
             SWITCHED_SHARE
         } else {
@@ -490,7 +584,7 @@ impl Encoder {
         };
         let target =
             (share * budget - self.balance / 4.0).clamp(budget / 4.0, 2.0 * share * budget);
-        let max = packet_bits - 6.0 - f64::from(cfg.log2_frame_size);
+        let max = self.rate.max;
         let trim = match (index, trim_end) {
             (0, end) => Some(Trim {
                 start: Some(n as u32),

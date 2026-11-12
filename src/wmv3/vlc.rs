@@ -1,14 +1,13 @@
 //! Prefix code tables built from (code, length) pairs indexed by symbol.
 
-use std::collections::HashMap;
-
 use super::bits::{BitReader, BitWriter};
 use super::{CodeTable, FrameError};
+use crate::int_map::IntMap;
 
 #[derive(Debug)]
 pub struct Vlc {
     name: CodeTable,
-    decode: HashMap<(u8, u32), u16>,
+    decode: IntMap<(u8, u32), u16>,
     encode: Vec<Option<(u32, u8)>>,
     max_len: u8,
 }
@@ -17,7 +16,7 @@ impl Vlc {
     /// Entries with length 0 are unused symbols.
     pub fn new<C: Copy + Into<u32>>(name: CodeTable, codes: &[C], lens: &[u8]) -> Self {
         assert_eq!(codes.len(), lens.len(), "{name:?}: table shape");
-        let mut decode = HashMap::new();
+        let mut decode = IntMap::default();
         let mut encode = Vec::with_capacity(codes.len());
         for (sym, (&code, &len)) in codes.iter().zip(lens).enumerate() {
             if len == 0 {

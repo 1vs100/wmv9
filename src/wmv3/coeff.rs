@@ -649,8 +649,8 @@ struct CodeKey {
 }
 
 /// Table index of each (run, level, last) per coding set.
-fn code_tables() -> &'static [std::collections::HashMap<CodeKey, u8>; 8] {
-    static TABLES: std::sync::OnceLock<[std::collections::HashMap<CodeKey, u8>; 8]> =
+fn code_tables() -> &'static [crate::int_map::IntMap<CodeKey, u8>; 8] {
+    static TABLES: std::sync::OnceLock<[crate::int_map::IntMap<CodeKey, u8>; 8]> =
         std::sync::OnceLock::new();
     TABLES.get_or_init(|| {
         std::array::from_fn(|set| {

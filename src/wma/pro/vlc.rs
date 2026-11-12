@@ -1,8 +1,7 @@
 //! Huffman codes given as lengths in code order, the form of FFmpeg's
 //! tables: each symbol takes the next free code of its length.
 
-use std::collections::HashMap;
-
+use crate::int_map::IntMap;
 use crate::wmv3::bits::{BitReader, BitWriter, OutOfBits};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -13,8 +12,8 @@ struct Code {
 
 /// A code table over symbols of type i32.
 pub(crate) struct Vlc {
-    codes: HashMap<i32, Code>,
-    symbols: HashMap<Code, i32>,
+    codes: IntMap<i32, Code>,
+    symbols: IntMap<Code, i32>,
     max_len: u32,
 }
 
@@ -29,8 +28,8 @@ pub enum VlcError {
 impl Vlc {
     /// Codes for `entries` of (length, symbol) in code order.
     pub(crate) fn new(entries: impl IntoIterator<Item = (u8, i32)>) -> Self {
-        let mut codes = HashMap::new();
-        let mut symbols = HashMap::new();
+        let mut codes = IntMap::default();
+        let mut symbols = IntMap::default();
         let mut next: u64 = 0;
         let mut max_len = 0;
         for (len, sym) in entries {

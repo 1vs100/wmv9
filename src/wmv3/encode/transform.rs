@@ -64,16 +64,29 @@ fn invert(mut a: Matrix) -> Matrix {
     inv
 }
 
+fn transpose(m: &Matrix) -> Matrix {
+    (0..64 * 64).map(|i| m[i % 64 * 64 + i / 64]).collect()
+}
+
+/// The forward transform transposed: row p holds pixel p's weight in
+/// every coefficient.
 fn forward_matrix() -> &'static Matrix {
     static M: OnceLock<Matrix> = OnceLock::new();
-    M.get_or_init(|| invert(inverse_matrix()))
+    M.get_or_init(|| transpose(&invert(inverse_matrix())))
 }
 
 /// Coefficients, in the decoder's layout, whose inverse transform gives
 /// `pixels` (row-major 8x8).
 pub(crate) fn forward(pixels: &[f64; 64]) -> [f64; 64] {
-    let m = forward_matrix();
-    std::array::from_fn(|k| (0..64).map(|p| m[k * 64 + p] * pixels[p]).sum())
+    // All coefficients accumulate together, each over the pixels in order
+    // from -0.0 as a sum of each would.
+    let mut out = [-0.0; 64];
+    for (weights, &x) in forward_matrix().chunks_exact(64).zip(pixels) {
+        for (o, &w) in out.iter_mut().zip(weights) {
+            *o += w * x;
+        }
+    }
+    out
 }
 
 #[cfg(test)]
